@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fait sortir Charles de Prison</title>
+  <style>
+    body { text-align: center; font-family: Arial; }
+    canvas { background: #eee; margin-top: 20px; border: 2px solid #333; }
+    p { font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Fait sortir Charles de Prison</h1>
+  <p>Attention, il faut le faire sortir avant qu'il ne se fasse attraper !!</p>
+  <canvas id="maze" width="600" height="600"></canvas>
+
+  <script>
+    const canvas = document.getElementById('maze');
+    const ctx = canvas.getContext('2d');
+
+    const rows = 20;
+    const cols = 20;
+    const cellSize = 30;
+
+    class Cell {
+      constructor(r, c) {
+        this.r = r;
+        this.c = c;
+        this.walls = { top: true, right: true, bottom: true, left: true };
+        this.visited = false;
+      }
+    }
+
+    let grid = [];
+    for (let r = 0; r < rows; r++) {
+      let row = [];
+      for (let c = 0; c < cols; c++) {
+        row.push(new Cell(r, c));
+      }
+      grid.push(row);
+    }
+
+    function index(r, c) {
+      if (r < 0 || c < 0 || r >= rows || c >= cols) return null;
+      return grid[r][c];
+    }
+
+    function generateMaze() {
+      let stack = [];
+      let current = grid[0][0];
+      current.visited = true;
+
+      while (true) {
+        let neighbors = [];
+        let top = index(current.r - 1, current.c);
+        let right = index(current.r, current.c + 1);
+        let bottom = index(current.r + 1, current.c);
+        let left = index(current.r, current.c - 1);
+
+        if (top && !top.visited) neighbors.push({ cell: top, dir: 'top' });
+        if (right && !right.visited) neighbors.push({ cell: right, dir: 'right' });
+        if (bottom && !bottom.visited) neighbors.push({ cell: bottom, dir: 'bottom' });
+        if (left && !left.visited) neighbors.push({ cell: left, dir: 'left' });
+
+        if (neighbors.length > 0) {
+          let { cell: next, dir } = neighbors[Math.floor(Math.random() * neighbors.length)];
+
+          if (dir === 'top') {
+            current.walls.top = false;
+            next.walls.bottom = false;
+          } else if (dir === 'right') {
+            current.walls.right = false;
+            next.walls.left = false;
+          } else if (dir === 'bottom') {
+            current.walls.bottom = false;
+            next.walls.top = false;
+          } else if (dir === 'left') {
+            current.walls.left = false;
+            next.walls.right = false;
+          }
+
+          stack.push(current);
+          current = next;
+          current.visited = true;
+        } else if (stack.length > 0) {
+          current = stack.pop();
+        } else {
+          break;
+        }
+      }
+    }
+
+    const playerImg = new Image();
+    playerImg.src = 'player.png';
+
+    const monsterImg = new Image();
+    monsterImg.src = 'monster.png';
+
+    let player = { r: 0, c: 0 };
+    let monster = { r: rows - 1, c: cols - 1 };
+
+    function drawMaze() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          let cell = grid[r][c];
+          let x = c * cellSize;
+          let y = r * cellSize;
+
+          if (cell.walls.top) {
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + cellSize, y);
+            ctx.stroke();
+          }
+          if (cell.walls.right) {
+            ctx.beginPath();
+            ctx.moveTo(x + cellSize, y);
+            ctx.lineTo(x + cellSize, y + cellSize);
+            ctx.stroke();
+          }
+          if (cell.walls.bottom) {
+            ctx.beginPath();
+            ctx.moveTo(x, y + cellSize);
+            ctx.lineTo(x + cellSize, y + cellSize);
+            ctx.stroke();
+          }
+          if (cell.walls.left) {
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x, y + cellSize);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Sortie
+      ctx.fillStyle = 'green';
+      ctx.fillRect((cols - 1) * cellSize + 5, (rows - 1) * cellSize + 5, cellSize - 10, cellSize - 10);
+
+      // Images
+      ctx.drawImage(playerImg, player.c * cellSize + 3, player.r * cellSize + 3, cellSize - 6, cellSize - 6);
+      ctx.drawImage(monsterImg, monster.c * cellSize + 3, monster.r * cellSize + 3, cellSize - 6, cellSize - 6);
+    }
+
+    function movePlayer(dir) {
+      let cell = grid[player.r][player.c];
+      if (dir === 'up' && !cell.walls.top) player.r--;
+      else if (dir === 'right' && !cell.walls.right) player.c++;
+      else if (dir === 'down' && !cell.walls.bottom) player.r++;
+      else if (dir === 'left' && !cell.walls.left) player.c--;
+
+      checkGameOver();
+      checkWin();
+      drawMaze();
+    }
+
+    function moveMonster() {
+      let moves = [];
+      let cell = grid[monster.r][monster.c];
+
+      if (!cell.walls.top) moves.push({ r: monster.r - 1, c: monster.c });
+      if (!cell.walls.right) moves.push({ r: monster.r, c: monster.c + 1 });
+      if (!cell.walls.bottom) moves.push({ r: monster.r + 1, c: monster.c });
+      if (!cell.walls.left) moves.push({ r: monster.r, c: monster.c - 1 });
+
+      moves.sort((a, b) => {
+        let da = Math.abs(a.r - player.r) + Math.abs(a.c - player.c);
+        let db = Math.abs(b.r - player.r) + Math.abs(b.c - player.c);
+        return da - db;
+      });
+
+      if (moves.length > 0) {
+        monster.r = moves[0].r;
+        monster.c = moves[0].c;
+      }
+
+      checkGameOver();
+      drawMaze();
+    }
+
+    function checkGameOver() {
+      if (player.r === monster.r && player.c === monster.c) {
+        setTimeout(() => alert("Le monstre t'a mangé !"), 50);
+        player = { r: 0, c: 0 };
+        monster = { r: rows - 1, c: cols - 1 };
+      }
+    }
+
+    function checkWin() {
+      if (player.r === rows - 1 && player.c === cols - 1) {
+        setTimeout(() => alert("Bravo, tu as gagné !"), 50);
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp') movePlayer('up');
+      else if (e.key === 'ArrowRight') movePlayer('right');
+      else if (e.key === 'ArrowDown') movePlayer('down');
+      else if (e.key === 'ArrowLeft') movePlayer('left');
+    });
+
+    // Lancer le jeu une fois les images chargées
+    playerImg.onload = () => {
+      monsterImg.onload = () => {
+        generateMaze();
+        drawMaze();
+        setInterval(moveMonster, 500);
+      };
+    };
+  </script>
+</body>
+</html>
